@@ -2,14 +2,32 @@ import { exec } from "@actions/exec";
 import * as core from "@actions/core";
 import * as toolCache from "@actions/tool-cache";
 
+import * as fs from 'fs';
+import * as zlib from 'zlib';
+
+async function gunzipFile(inputPath: string, outputPath: string): Promise<void> {
+  const readStream = fs.createReadStream(inputPath);
+  const writeStream = fs.createWriteStream(outputPath);
+  const gunzip = zlib.createGunzip();
+
+  readStream
+    .pipe(gunzip)
+    .pipe(writeStream)
+    .on('error', (err) => console.error('Decompression error:', err))
+    .on('finish', () => console.log('Decompression complete'));
+}
+
 export async function setupKeys() {
   core.debug("Fetching verification keys");
   let path = await toolCache.downloadTool(
     "https://swift.org/keys/all-keys.asc"
   );
 
+  core.debug("gunzipping keys")
+  await gunzipFile(`${path}`, "./all-keys.unzipped.asc")
+
   core.debug("Importing verification keys");
-  await exec(`gpg --import "${path}"`);
+  await exec(`gpg --import ./all-keys.unzipped.asc`);
 
   core.debug("Refreshing keys");
   await refreshKeys();
